@@ -1,0 +1,12 @@
+# dataset
+data/
+
+# csv
+*.csv
+
+# python
+__pycache__/
+*.pyc
+
+# env
+.venv/
