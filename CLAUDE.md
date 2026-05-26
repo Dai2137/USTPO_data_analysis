@@ -20,6 +20,17 @@ python locarno_distribution.py   # Locarno major-class counts + bar chart
 python no_figs_distribution.py   # no_figs histograms (all + per Locarno class)
 ```
 
+Citation fetching (requires `data/processed/patents_metadata.csv` and `.env` with `MY_API_KEY`):
+
+```bash
+python fetch_citations.py                # 引用データを取得（処理済みをスキップ）
+python fetch_citations.py --no-skip-existing  # 全件再処理
+```
+
+出力先: `data/processed/citations/`
+- `citations.json` — 特許IDごとのAPIレスポンス生データ
+- `citation_pairs.csv` — patents_metadata.csv と結合用のペア形式（`cited_patent_id`, `citing_publication_number`, `citing_in_dataset`, `citation_category_code` 等）
+
 Install dependencies:
 
 ```bash
@@ -41,6 +52,8 @@ data/*.tar
                           data/raw/I2026xxxx/   (original folders moved here)
   → process_xml.py     → data/processed/patents_metadata.csv
   → locarno_distribution.py / no_figs_distribution.py → data/processed/*.png + *.csv
+  → fetch_citations.py  → data/processed/citations/citations.json
+                           data/processed/citations/citation_pairs.csv
 ```
 
 **Key facts:**
@@ -48,3 +61,4 @@ data/*.tar
 - `data/` and `*.csv` are gitignored — no data is committed.
 - `locarno_class` is stored as a raw string like `"02-01"`. Both analysis scripts use the same `extract_major_class()` helper (duplicated, not shared) that strips the leading two digits as the major class.
 - `patents_metadata.csv` is written with `utf-8-sig` (BOM) for Excel compatibility.
+- `fetch_citations.py` uses the USPTO Enriched Citations API (`enriched_cited_reference_metadata/v2`). It queries by `citedDocumentIdentifier` (= `patent_id`) and flags whether the citing patent (`publicationNumber`) is also in the dataset (`citing_in_dataset`). `citation_pairs.csv` is also written with `utf-8-sig`.
