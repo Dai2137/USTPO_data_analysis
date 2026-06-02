@@ -10,3 +10,9 @@ __pycache__/
 
 # env
 .venv/
+.env
+
+# reference materials (PDFs and paper folders)
+*.pdf
+論文/
+意匠ユースケース/

@@ -2,6 +2,16 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
+## Project documents
+
+| File | Role |
+| --- | --- |
+| `README.md` | **user-facing docs** — project overview, setup steps, pipeline commands |
+| `CLAUDE.md` | **AI instructions** — guidance for Claude Code when working in this repo |
+| `uspto_data_sources.md` | **API reference** — USPTO and related API field definitions, endpoints, data access policy |
+| `research_ideas.md` | **research notes** — RQ brainstorming, concerns, design ideas (Japanese) |
+| `DeepResearch/deep-research-report.md` | **research report** — detailed survey of design patent data availability across US/JP/KR |
+
 ## Running scripts
 
 Data processing pipeline — must be run in this order after placing `.tar` files in `data/`:

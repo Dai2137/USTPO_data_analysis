@@ -79,7 +79,6 @@ def export_pairs(all_results, output_dir):
                 "cited_patent_id": cited_id,
                 "citing_publication_number": pub_norm,
                 "citing_application_number": rec.get("patentApplicationNumber"),
-                "citing_in_dataset": rec.get("citing_in_dataset", False),
                 "citation_category_code": rec.get("citationCategoryCode"),
                 "office_action_date": rec.get("officeActionDate"),
             })
@@ -88,8 +87,7 @@ def export_pairs(all_results, output_dir):
     df_pairs = pd.DataFrame(rows)
     pairs_path = output_dir / "citation_pairs.csv"
     df_pairs.to_csv(pairs_path, index=False, encoding="utf-8-sig")
-    in_dataset = df_pairs["citing_in_dataset"].sum()
-    print(f"📊 citation_pairs.csv: {len(df_pairs)}件 (うちデータセット内ペア: {in_dataset}件) → {pairs_path}")
+    print(f"📊 citation_pairs.csv: {len(df_pairs)}件 → {pairs_path}")
 
 
 def process(skip_existing: bool = True):
@@ -97,8 +95,7 @@ def process(skip_existing: bool = True):
     JSON_OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
 
     df_meta = pd.read_csv(METADATA_CSV)
-    known_ids = set(df_meta["patent_id"].dropna().apply(normalize_patent_id))
-    print(f"🔍 patents_metadata.csv から {len(known_ids):,} 件の特許IDを読み込みました。")
+    print(f"🔍 patents_metadata.csv から {len(df_meta):,} 件の特許IDを読み込みました。")
 
     processed_ids = set()
     if PROCESSED_LOG_PATH.exists():
@@ -130,11 +127,6 @@ def process(skip_existing: bool = True):
             continue
 
         if docs:
-            for doc in docs:
-                pub_num = doc.get("publicationNumber")
-                pub_norm = normalize_patent_id(pub_num) if pub_num else None
-                doc["citing_in_dataset"] = pub_norm in known_ids if pub_norm else False
-
             all_results[target_patent] = {
                 "citations_found": len(docs),
                 "records": docs,
