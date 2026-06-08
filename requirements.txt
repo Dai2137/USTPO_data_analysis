@@ -1,3 +1,11 @@
 pandas
 lxml
 tqdm
+
+# functional_description/ scripts
+torch
+transformers
+Pillow
+faiss-cpu
+sentence-transformers
+accelerate
