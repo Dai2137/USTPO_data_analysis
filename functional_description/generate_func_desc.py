@@ -46,12 +46,13 @@ METADATA_CSV = PROCESSED_DIR / "patents_metadata.csv"
 MODEL_ID = "HuggingFaceTB/SmolVLM-500M-Instruct"
 
 USER_PROMPT_TEMPLATE = (
-    "This is a design patent drawing for a product titled '{title}' "
+    "This is a design patent drawing for '{title}' "
     "(Locarno classification: {locarno}).\n"
-    "In 2-3 sentences describe: "
-    "(1) what this product is, "
-    "(2) how a user would use it in daily life, "
-    "(3) any notable functional features visible in the design."
+    "Look carefully at the specific shapes, contours, and structural features visible in the drawing. "
+    "In 2-3 sentences, describe the design intent: "
+    "(1) What distinctive visual form or structural feature does this design have? "
+    "(2) What functional purpose do those specific shapes serve? "
+    "Explain WHY this product is shaped this way — how does its form enable its function."
 )
 
 
@@ -195,10 +196,10 @@ def generate_description(
 
 # ---------- メイン ----------
 
-def load_done_ids() -> set[str]:
-    if not OUTPUT_CSV.exists():
+def load_done_ids(output_csv: Path) -> set[str]:
+    if not output_csv.exists():
         return set()
-    with open(OUTPUT_CSV, encoding="utf-8-sig") as f:
+    with open(output_csv, encoding="utf-8-sig") as f:
         return {row["patent_id"] for row in csv.DictReader(f)}
 
 
@@ -209,9 +210,14 @@ def main():
         help="Locarno大分類で層化サンプリングする件数（例: --sample 1000）"
     )
     parser.add_argument("--seed", type=int, default=42, help="乱数シード")
+    parser.add_argument(
+        "--output", type=Path, default=OUTPUT_CSV,
+        help="出力CSVのパス（デフォルト: funcdesc.csv）"
+    )
     args = parser.parse_args()
 
-    OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
+    output_csv: Path = args.output
+    output_csv.parent.mkdir(parents=True, exist_ok=True)
 
     # 全件読み込み
     all_rows: list[dict] = []
@@ -226,7 +232,7 @@ def main():
         rows = all_rows
 
     # 処理済みをスキップ
-    done = load_done_ids()
+    done = load_done_ids(output_csv)
     rows = [r for r in rows if r["patent_id"] not in done]
 
     if not rows:
@@ -243,9 +249,9 @@ def main():
 
     model, processor, device = load_model()
 
-    write_header = not OUTPUT_CSV.exists() or os.path.getsize(OUTPUT_CSV) == 0
+    write_header = not output_csv.exists() or os.path.getsize(output_csv) == 0
 
-    with open(OUTPUT_CSV, "a", newline="", encoding="utf-8-sig") as out_f:
+    with open(output_csv, "a", newline="", encoding="utf-8-sig") as out_f:
         writer = csv.writer(out_f)
         if write_header:
             writer.writerow(["patent_id", "functional_description"])
@@ -274,7 +280,7 @@ def main():
 
             out_f.flush()
 
-    print(f"\nDone. Results saved to {OUTPUT_CSV}")
+    print(f"\nDone. Results saved to {output_csv}")
 
 
 if __name__ == "__main__":

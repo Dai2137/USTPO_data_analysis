@@ -11,72 +11,64 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 | `uspto_data_sources.md` | **API reference** — USPTO and related API field definitions, endpoints, data access policy |
 | `research_ideas.md` | **research notes** — RQ brainstorming, design examination criteria (US/JP/KR), concerns (Japanese) |
 | `impact_data_information.md` | **field reference** — column-by-column explanation of `patents_metadata.csv` fields |
-| `DeepResearch/deep-research-report.md` | **research report** — detailed survey of design patent data availability across US/JP/KR |
-| `DeepResearch/意匠・テキストマルチモーダル検索システムにおける情報量損失抑制のための相違表現抽出技術調査報告書1.md` | **tech survey** — shared/private representation disentanglement methods for multimodal search |
+| `WBS_until_CVPR.xlsx` | **WBS** — task schedule toward CVPR November deadline |
+| `weekly_reports/` | **weekly reports** — MTG reports by date (`weekly_report_YYYYMMDD.md`) |
+| `DeepResearch/01_data_availability/deep-research-report.md` | **research report** — detailed survey of design patent data availability across US/JP/KR |
+| `DeepResearch/03_ml_methods/意匠・テキストマルチモーダル検索システムにおける情報量損失抑制のための相違表現抽出技術調査報告書1.md` | **tech survey** — shared/private representation disentanglement methods (DSN→MISA→DeCUR lineage) |
+| `DeepResearch/03_ml_methods/意匠検索における非冗長マルチモーダル埋め込み表現学習の最先端技術調査とシステム応用1.md` | **tech survey** — modern methods post-CLIP: DeCUR / COrAL / Adaptive Barlow Twins / ReCo comparison |
+| `DeepResearch/03_ml_methods/CLIP以降の画像テキスト共有表現学習と下流利用の比較研究.md` | **tech survey** — 10-paper comparison of CLIP-era shared representation learning (ALIGN, LiT, ALBEF, BLIP, SigLIP, Pic2Word, SEARLE…) |
+
+## IMPACT dataset
+
+**現在のプロジェクトはこのデータセットのみを使用する。** `data/processed/`, `data/raw/`, `patents_metadata.csv` は使わない。
+
+### ディレクトリ構造
+
+```text
+data/IMPACT/
+├── 2020.csv                        # メタデータ CSV（caption列あり）
+├── 2021.csv
+├── 2022.csv
+├── 2020/
+│   └── 2020/
+│       ├── processed_xml_2020.csv  # メタデータ CSV（caption列なし）
+│       └── USD<7digits>-<date>/    # 特許ごとの画像フォルダ
+│           ├── USD<7digits>-<date>-D<5digits>.TIF  # 意匠図面
+│           └── USD<7digits>-<date>.XML              # XML原本
+├── 2021/
+│   └── 2021/ ...
+└── 2022/
+    └── 2022/ ...
+```
+
+### CSVの列
+
+| 列 | 内容 |
+| --- | --- |
+| `title` | 特許タイトル |
+| `id` | 特許ID（例: `D0949851`） |
+| `claim` | クレームテキスト |
+| `date` | 登録日（YYYYMMDD） |
+| `class` | Locarnoクラス |
+| `class_search` | 検索クラスリスト |
+| `inv_country` | 発明者の国 |
+| `no_figs` | 図面枚数 |
+| `sheets` | シート数 |
+| `file_names` | TIFファイル名リスト |
+| `fig_desc` | 図面説明文リスト |
+| `caption` | AI生成の視覚的説明文（**外側CSVのみ**: `2020.csv` / `2021.csv` / `2022.csv`） |
+
+### 画像フォルダとCSVの紐付け
+
+- CSV `id`: `D0949851` → 数字7桁: `0949851`
+- フォルダ名: `USD0949851-20220426` → `USD`以降の7桁: `0949851`
+- 最初の画像（`D00000.TIF`）が表紙図面
 
 ## Running scripts
 
-### Data processing pipeline
-
-Must be run in this order after placing `.tar` files in `data/`:
-
-```bash
-python "Data processing/extract_tar.py"    # 1. Unpack .tar files
-python "Data processing/folder_organize.py" # 2. Keep only DESIGN subfolders
-python "Data processing/unzip.py"           # 3. Unzip patents into data/processed/
-python "Data processing/process_xml.py"    # 4. Parse XML → data/processed/patents_metadata.csv
-```
-
-### Analysis scripts
-
-Require `data/processed/patents_metadata.csv`:
-
-```bash
-python locarno_distribution.py    # Locarno major-class counts + bar chart
-python no_figs_distribution.py    # no_figs histograms (all + per Locarno class)
-```
-
-### Enriched citation fetching
-
-Require `data/processed/patents_metadata.csv` and `.env` with `MY_API_KEY`:
-
-```bash
-python fetch_citations.py                 # 引用データを取得（処理済みをスキップ）
-python fetch_citations.py --no-skip-existing  # 全件再処理
-```
-
-出力先: `data/processed/citations/`
-
-- `citations.json` — 特許IDごとのAPIレスポンス生データ
-- `citation_pairs.csv` — `cited_patent_id`, `citing_publication_number`, `citing_in_dataset`, `citation_category_code` 等
-
-### Office Action citation fetching
-
-```bash
-python fetch_oa_citations.py                 # OA引用データを取得（処理済みをスキップ）
-python fetch_oa_citations.py --no-skip-existing  # 全件再処理
-```
-
-出力先: `data/processed/oa_citations/`
-
-- `oa_citations.json` — 特許IDごとのAPIレスポンス生データ
-- `oa_citation_pairs.csv` — `cited_patent_id`, `citing_application_number`, `examinerCitedReferenceIndicator` 等
-
-### Office Action text fetching
-
-```bash
-python fetch_oa_texts.py                 # OAテキストを取得（処理済みをスキップ）
-python fetch_oa_texts.py --no-skip-existing  # 全件再処理
-```
-
-出力先: `data/processed/oa_texts/`
-
-- `oa_texts.json` — 特許IDごとのAPIレスポンス生データ
-- `oa_text_records.csv` — 拒絶理由テキスト等の主要フィールド（`sections.*` 展開済み）
-
 ### Functional description & multimodal search (3-phase pipeline)
 
-Require `data/processed/patents_metadata.csv`. GPU推奨（Phase 1はSmolVLM、Phase 2はCLIP）:
+IMPACTデータセットを使用。GPU推奨（Phase 1はSmolVLM、Phase 2はCLIP）:
 
 ```bash
 # Phase 1: VLMで意匠画像から機能文を生成
@@ -146,19 +138,27 @@ data/processed/patents_metadata.csv
 
 ### Multimodal search pipeline
 
+Goal: text query → image-only database cross-modal retrieval (no text annotations on the DB side).
+
 ```text
 data/processed/patents_metadata.csv  +  data/processed/USD*/*.TIF
-  → generate_func_desc.py  [Phase 1: SmolVLM-500M-Instruct]
-       → data/processed/func_search/funcdesc.csv
 
-  → build_embeddings.py    [Phase 2: CLIP + sentence-transformers]
-       → data/processed/func_search/faiss_image.index
-       → data/processed/func_search/faiss_text.index
-       → data/processed/func_search/index_map.json
+  Phase 1 — Training data preparation
+  → generate_func_desc.py  [SmolVLM-500M-Instruct, local]
+       → data/processed/func_search/funcdesc.csv   (patent_id, functional_description)
 
-  → search.py              [Phase 3: query → Top-K patents]
-       input:  text query string
-       output: stdout (ranked patent list)
+  Phase 2 — Embedding model construction + image DB
+  → build_embeddings.py    [baseline: CLIP image encoder + sentence-transformers]
+       → data/processed/func_search/faiss_image.index   (512-dim, all patent images)
+       → data/processed/func_search/faiss_text.index    (768-dim, funcdesc text; baseline only)
+       → data/processed/func_search/index_map.json      (FAISS row → patent_id)
+       Target: fine-tune shared/unique-separated encoder (DeCUR-based); image-only FAISS DB
+
+  Phase 3 — Text-to-image cross-modal search
+  → search.py              [baseline: RRF over image + text FAISS indexes]
+       input:  text query (functional description; may or may not include shape/geometry)
+       output: stdout (Top-K ranked patent list)
+       Target: text encoder → shared vector → image-only FAISS DB → Top-K
 ```
 
 ## Key facts
@@ -172,5 +172,5 @@ data/processed/patents_metadata.csv  +  data/processed/USD*/*.TIF
 - **fetch_oa_texts.py** uses the USPTO OA Actions API (`oa/oa_actions/v1/records`). Queries by `patentNumber` (full ID, e.g. `"D123456"`). Returns Office Action full-text including rejection reason texts (`section101/102/103/112RejectionText`). `sections.*` fields are flattened in the CSV output.
 - All three fetch scripts use resume logic: a `.txt` log file tracks processed IDs to allow safe restart. `--no-skip-existing` forces full reprocessing.
 - **Phase 1 (generate_func_desc.py)**: Uses `HuggingFaceTB/SmolVLM-500M-Instruct` locally (no API key needed). Stratified sampling by Locarno major class with `--sample N`. Skips already-processed patents.
-- **Phase 2 (build_embeddings.py)**: Uses `openai/clip-vit-base-patch32` for image embeddings (512-dim) and `sentence-transformers` for text embeddings (768-dim). Stores in separate FAISS flat indexes.
-- **Phase 3 (search.py)**: Blends image and text similarity scores with `--alpha` weight (default 0.5). Higher alpha = more weight to image similarity.
+- **Phase 2 (build_embeddings.py)**: Baseline uses `openai/clip-vit-base-patch32` for image embeddings (512-dim) and `sentence-transformers/paraphrase-multilingual-mpnet-base-v2` for text embeddings (768-dim), stored in separate FAISS flat indexes. Target: fine-tune a shared/unique-separated encoder (DeCUR-based) and build an image-only FAISS DB.
+- **Phase 3 (search.py)**: Baseline blends image-FAISS and text-FAISS ranks via Reciprocal Rank Fusion (`score = alpha * 1/(1+img_rank) + (1-alpha) * 1/(1+txt_rank)`). Target: text query → fine-tuned text encoder → image-only FAISS DB → Top-K (no text index on DB side).

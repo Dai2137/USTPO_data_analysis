@@ -139,11 +139,52 @@ SmolVLMProcessor への切り替えと `preprocessor_config.json` パッチ後�
 3. **検索品質の定性評価**：
    - クエリ例で上位10件を確認
    - 機能文の品質チェック（VLM出力が意味をなしているか）
-4. **Phase2の工夫調査**　小橋さんコメントの通り，画像とテキスト両方の旨味を引き出すための既存方法を調査．
-   1. 
-5. 国際学会に向けて計画を立てる
+4. **Phase2の工夫調査**：画像とテキスト両方の旨味を引き出すための既存手法を調査する（小橋さんコメント参照: `2026_06_04mtg_小橋さん提案.docx`）
 
-## 4. 国際学会どれ出すか
+   以下6論文を読む。→全部古い．マルチモーダルが流行る前．
+
+   | # | 論文名 | 会議/年 | 著者 | 被引用数 | カテゴリ |
+   | --- | --- | --- | --- | --- | --- |
+   | 1 | **Domain Separation Networks** | NeurIPS 2016 | Bousmalis et al. (Google Brain) | ~5,750 | Shared/Private分離の元祖 |
+   | 2 | **Barlow Twins: Self-Supervised Learning via Redundancy Reduction** | ICML 2021 | Zbontar et al. (Meta AI) | ~2,200 | Modal Collapse防止の現代標準 |
+   | 3 | **MISA: Modality-Invariant and -Specific Representations for Multimodal Sentiment Analysis** | ACM MM 2020 | CMU (Morency lab) | ~450 | マルチモーダル分離の教科書的論文 |
+   | 4 | **Learning Disentangled Representations for Cross-Modal Retrieval** | ACM MM 2021 | Deepak Gupta et al. | — | クロスモーダル検索への直接適用 |
+   | 5 | **Disentangled Multimodal Representation Learning for Recommendation** | WSDM 2023 | — | — | CLUB（相互情報量上界）を $\mathcal{L}_{\text{diversity}}$ に使用 |
+   | 6 | **Cross-Modal Disentanglement Networks for Deep Joint Embedding** | — | — | — | DSN の CLIP 空間拡張 |
+
+   **各論文の立ち位置（意匠システムにおける根拠）:**
+
+   1. **Domain Separation Networks (NeurIPS 2016)**
+      - $\mathcal{L}_{\text{diff}}$（共通と固有を直交させる損失）を世界で初めて明確に定義した元祖論文。現在のマルチモーダル表現分離研究ほぼ全てのルーツ。
+      - 小橋さんへの説明: 「Google BrainのDSN（NeurIPS 2016、被引用5750件超）の数理モデルをCLIP空間に拡張して適用します」という学術的妥当性の根拠。
+      - 損失対応: $\mathcal{L}_{\text{total}} = \mathcal{L}_{\text{task}} + \alpha\mathcal{L}_{\text{recon}} + \beta\mathcal{L}_{\text{difference}} + \gamma\mathcal{L}_{\text{similarity}}$
+
+   2. **Barlow Twins (ICML 2021)**
+      - Modal Collapse / Redundancy を防ぐ「CLIP登場以降の現代デファクトスタンダード」。出力ベクトルのクロス相関行列を単位行列に近づけることで、各次元が異なる特徴をコードするよう強制する。
+      - 小橋さんへの説明: 「CLIP空間のModal Collapseを防ぐ制約として、Meta AIのBarlow Twins（ICML 2021、被引用2200件超）の非冗長性損失を固有サブスペースに採用します」。
+      - 損失対応: $\mathcal{L}_{\text{diversity}}$ の実装として採用
+
+   3. **MISA (ACM MM 2020)**
+      - 画像・音声・テキストのマルチモーダルから Modality-Invariant と Modality-Specific を同時に抽出。提示された3損失（align, diff, diversity）の組み合わせを感情分析タスクで実際に実証した教科書的論文。
+      - 意匠システムへの立ち位置: 意匠図面（画像）+ 機能文（テキスト）という2モダリティへの適用の先行事例。MMD（分布整合）を $\mathcal{L}_{\text{align}}$ に使っている点が参考になる。
+
+   4. **Learning Disentangled Representations for Cross-Modal Retrieval (ACM MM 2021)**
+      - 「画像・テキストのクロスモーダル検索」に3要素ロスを組んだ、本研究への最も直接的な先行研究。$\mathcal{L}_{\text{diff}}$ として同一モダリティ内の直交性制約を導入している。
+      - 意匠システムへの立ち位置: 「Modal Collapseを防ぎ検索精度を劇的に向上させたACM MMのトップ研究を、意匠データ（図面と機能文）に適合させた」という直接根拠。
+
+   5. **Disentangled Multimodal Representation Learning for Recommendation (WSDM 2023)**
+      - 商品画像（視覚固有: デザイン）+ 商品説明文（テキスト固有: スペック）の分離。$\mathcal{L}_{\text{diversity}}$ として CLUB（Contrastive Log-ratio Upper Bound）= 相互情報量上界の最小化を明示的に組み込んでいる。
+      - 意匠システムへの立ち位置: 意匠の「図面固有の幾何情報（画像）」と「法的機能記述（テキスト）」の分離に同様の構造を使えるか。ただし**「画像と テキストの固有情報は無相関であるべき」という前提は意匠には合わない（形状と機能は連動する）→ CLUB の適用範囲を要確認**。
+
+   **$\mathcal{L}_{\text{total}} = \alpha\mathcal{L}_{\text{align}} + \beta\mathcal{L}_{\text{diff}} + \gamma\mathcal{L}_{\text{diversity}}$ との対応まとめ:**
+
+   | 損失項 | 内容 | 対応論文 |
+   | --- | --- | --- |
+   | $\mathcal{L}_{\text{align}}$ | 共有サブスペース間の類似度最大化（InfoNCE / Triplet / CORAL） | ①DSN の $\mathcal{L}_{\text{similarity}}$、③MISA、④ |
+   | $\mathcal{L}_{\text{diff}}$ | 共有と固有の直交性強制（Frobenius ノルム差分損失） | ①DSN の $\mathcal{L}_{\text{difference}}$、③MISA、④ |
+   | $\mathcal{L}_{\text{diversity}}$ | 固有ベクトルの次元間冗長性削減（Barlow Twins / CLUB / HSIC） | ②Barlow Twins、⑤CLUB、⑥HSICを用いた実装（要文献確認） |
+
+5. 国際学会どれ出すか
 CVPRを目指して頑張りたい（11月〆切）
 学会候補　https://matsuolab-geniac.notion.site/2869a903acd081d6a139f32e4e4271ff
 

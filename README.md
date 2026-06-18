@@ -1,133 +1,115 @@
 # USPTO Design Patent Data Analysis
 
-USPTOが公開するデザイン特許データ（TAR形式）を取得・処理し、Locarnoクラス分布や図面枚数分布を分析するパイプラインです。
+IMPACTデータセット（USPTO意匠特許）を用いて、マルチモーダル検索システムの研究開発を行うプロジェクトです。
 
-## データソース
+## データセット: IMPACT
 
-[USPTO Bulk Data](https://data.uspto.gov/bulkdata/datasets/ptgrdt) から以下を取得します。
-
-- **Patent Grant Full Text Data with Embedded TIFF Images (Grant Red Book based on WIPO ST.36) - XML (JAN 2001 - PRESENT)**
-- ファイル形式: `.tar`（週次リリース）
-
-## プロジェクト構成
+`data/IMPACT/` 以下に格納されたIMPACTデータセットを使用します。
 
 ```
-USPTO_data_analysis/
-├── data/
-│   ├── I20260106.tar          # USPTOからダウンロードしたTARファイル
-│   ├── I20260113.tar
-│   ├── ...
-│   ├── raw/                   # unzip.py実行後に移動された展開済みフォルダ
-│   └── processed/
-│       ├── USD**/             # 特許ごとの展開フォルダ (XML + TIF)
-│       └── patents_metadata.csv  # process_xml.py が生成するメタデータ
-├── Data processing/
-│   ├── extract_tar.py         # TARファイルを展開
-│   ├── folder_organize.py     # DESIGNフォルダ以外を削除
-│   ├── unzip.py               # ZIPを processed/ に展開
-│   └── process_xml.py         # XMLを解析してCSVを生成
-├── locarno_distribution.py    # Locarno大分類の分布を集計・可視化
-├── no_figs_distribution.py    # 図面枚数の分布を集計・可視化
-└── requirements.txt
+data/IMPACT/
+├── 2020.csv                        # メタデータ CSV（caption列あり）
+├── 2021.csv
+├── 2022.csv
+├── 2020/
+│   └── 2020/
+│       ├── processed_xml_2020.csv
+│       └── USD<7digits>-<date>/    # 特許ごとの画像フォルダ
+│           ├── USD<7digits>-<date>-D<5digits>.TIF
+│           └── USD<7digits>-<date>.XML
+├── 2021/ ...
+└── 2022/ ...
 ```
+
+### CSVの主要列
+
+| 列 | 内容 |
+| --- | --- |
+| `title` | 特許タイトル |
+| `id` | 特許ID（例: `D0949851`） |
+| `claim` | クレームテキスト |
+| `date` | 登録日（YYYYMMDD） |
+| `class` | Locarnoクラス |
+| `no_figs` | 図面枚数 |
+| `file_names` | TIFファイル名リスト |
+| `caption` | AI生成の視覚的説明文（外側CSVのみ） |
 
 ## セットアップ
 
 ```bash
 pip install -r requirements.txt
+pip install matplotlib  # requirements.txtに含まれないが必要
 ```
 
-`requirements.txt` には `pandas`, `lxml`, `tqdm`, `matplotlib` が必要です（`matplotlib` は別途インストールしてください）。
+## 機能文生成 & マルチモーダル検索パイプライン
 
-## データ処理パイプライン
+テキストクエリで意匠画像データベースを検索するクロスモーダル検索システムです。GPU推奨。
 
-`data/` 直下にTARファイルを配置した後、以下の順に実行します。
+### Phase 1: 機能文生成（SmolVLM）
 
-### 1. TARを展開
+意匠図面画像からテキストの機能説明文を生成します。
 
 ```bash
-python "Data processing/extract_tar.py"
+# 層化サンプリング（Locarnoクラス別）
+python functional_description/generate_func_desc.py --sample 1000
+
+# テスト用（先頭5件）
+python functional_description/generate_func_desc.py --sample 5
+
+# 全件処理（未処理のみ）
+python functional_description/generate_func_desc.py
 ```
 
-`data/*.tar` を検出し、同名フォルダに展開します（展開済みはスキップ）。
+出力: `data/processed/func_search/funcdesc.csv`（`patent_id`, `functional_description`）
 
-### 2. DESIGNフォルダ以外を削除
+### Phase 2: 埋め込み構築（CLIP + FAISS）
 
 ```bash
-python "Data processing/folder_organize.py"
+python functional_description/build_embeddings.py
 ```
 
-各週次フォルダ内の `DESIGN` 以外のサブフォルダ（UTILITY, PLANTなど）と `*SUPP` フォルダを削除します。
+出力:
 
-### 3. ZIPを展開して processed/ に配置
+- `data/processed/func_search/faiss_image.index` — CLIP画像ベクトル
+- `data/processed/func_search/faiss_text.index` — テキストベクトル
+- `data/processed/func_search/index_map.json` — FAISSインデックス → patent_id
+
+### Phase 3: テキストクエリ検索
 
 ```bash
-python "Data processing/unzip.py"
+python functional_description/search.py "a glove used to protect hands during sports"
+python functional_description/search.py "手を保護するスポーツ用グローブ" --topk 5
+python functional_description/search.py "chair for office use" --alpha 0.7
 ```
 
-`DESIGN/*.ZIP` を `data/processed/<特許番号>/` に展開します。元の週次フォルダは `data/raw/` に移動されます。
+`--alpha`: 画像スコアの重み（0〜1、デフォルト0.5）
 
-展開後のフォルダ構成例:
+## プロジェクト構成
+
 ```
-data/processed/
-└── USD0939806-20220104/
-    ├── USD0939806-20220104.xml
-    └── USD0939806-20220104-D00001.TIF
-```
-
-### 4. XMLを解析してCSVを生成
-
-```bash
-python "Data processing/process_xml.py"
-```
-
-`data/processed/` 以下の全XMLを解析し、`data/processed/patents_metadata.csv` を生成します。
-
-**CSVのカラム:**
-
-| カラム | 内容 |
-|---|---|
-| `title` | 発明名称 |
-| `patent_id` | 特許番号 |
-| `publication_date` | 公開日 |
-| `application_date` | 出願日 |
-| `claim` | クレーム |
-| `locarno_class` | Locarno分類 |
-| `us_class` | US分類 |
-| `class_search` | 検索分類 |
-| `applicant_org` | 出願人（組織） |
-| `assignee_org` | 譲受人（組織） |
-| `inventor_names` | 発明者名 |
-| `inventor_countries` | 発明者国 |
-| `applicant_countries` | 出願人国 |
-| `no_figs` | 図面枚数 |
-| `sheets` | 図面シート数 |
-| `file_names` | TIFファイル名 |
-| `fig_desc` | 図面の説明 |
-| `patent_folder` | フォルダ名 |
-
-## 分析スクリプト
-
-### Locarno大分類の分布
-
-```bash
-python locarno_distribution.py
+USPTO_data_analysis/
+├── functional_description/
+│   ├── generate_func_desc.py    # Phase 1: SmolVLM で機能文生成
+│   ├── build_embeddings.py      # Phase 2: CLIP埋め込み + FAISSインデックス
+│   └── search.py                # Phase 3: テキストクエリ検索
+├── DeepResearch/
+│   ├── 01_data_availability/    # データ取得可能性調査
+│   ├── 02_use_cases/            # ユースケース調査
+│   └── 03_ml_methods/           # 手法調査（DeCUR、CLIP系など）
+├── weekly_reports/              # 週次MTGレポート
+├── CLAUDE.md                    # AI向け開発ガイド
+├── research_ideas.md            # リサーチクエスチョンのメモ
+├── impact_data_information.md   # データフィールド詳細
+├── uspto_data_sources.md        # USPTO API リファレンス
+└── requirements.txt
 ```
 
-`locarno_class` の先頭2桁（大カテゴリ）ごとの件数を集計します。
+## 関連ドキュメント
 
-**出力:**
-- `data/processed/locarno_major_distribution.csv`
-- `data/processed/locarno_major_distribution.png`
-
-### 図面枚数の分布
-
-```bash
-python no_figs_distribution.py
-```
-
-`no_figs`（図面枚数）の分布を全体およびLocarno大分類別に可視化します。
-
-**出力:**
-- `data/processed/no_figs_hist_all.png` — 全特許の図面枚数ヒストグラム
-- `data/processed/no_figs_hist_by_locarno.png` — Locarno大分類別のサブプロット
+| ファイル | 内容 |
+| --- | --- |
+| `research_ideas.md` | RQ・設計検討基準（US/JP/KR）・懸念事項 |
+| `impact_data_information.md` | `patents_metadata.csv` カラム詳細 |
+| `uspto_data_sources.md` | USPTO API フィールド定義・エンドポイント |
+| `DeepResearch/01_data_availability/` | US/JP/KR意匠データ取得可能性の調査報告 |
+| `DeepResearch/03_ml_methods/` | DeCUR・CLIP系マルチモーダル手法の技術調査 |
