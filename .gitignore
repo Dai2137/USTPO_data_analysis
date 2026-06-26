@@ -22,3 +22,10 @@ __pycache__/
 
 # log files
 logs/
+
+# SSH / TLS private keys
+*.pem
+*.key
+
+# temporary Drive upload folder
+.tmp.driveupload/

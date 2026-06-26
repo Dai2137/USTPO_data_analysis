@@ -8,6 +8,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 | --- | --- |
 | `README.md` | **user-facing docs** — project overview, setup steps, pipeline commands |
 | `CLAUDE.md` | **AI instructions** — guidance for Claude Code when working in this repo |
+| `research_implementation_log.md` | **interview/retrospective log** — research decisions and implementation challenges with rationale |
 | `uspto_data_sources.md` | **API reference** — USPTO and related API field definitions, endpoints, data access policy |
 | `research_ideas.md` | **research notes** — RQ brainstorming, design examination criteria (US/JP/KR), concerns (Japanese) |
 | `impact_data_information.md` | **field reference** — column-by-column explanation of `patents_metadata.csv` fields |
@@ -18,6 +19,19 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 | `DeepResearch/03_ml_methods/意匠検索における非冗長マルチモーダル埋め込み表現学習の最先端技術調査とシステム応用1.md` | **tech survey** — modern methods post-CLIP: DeCUR / COrAL / Adaptive Barlow Twins / ReCo comparison |
 | `DeepResearch/03_ml_methods/CLIP以降の画像テキスト共有表現学習と下流利用の比較研究.md` | **tech survey** — 10-paper comparison of CLIP-era shared representation learning (ALIGN, LiT, ALBEF, BLIP, SigLIP, Pic2Word, SEARLE…) |
 
+## Research & implementation log
+
+`research_implementation_log.md` には研究上の判断・実装上の困難と解決策を記録している。**面接・振り返り用の一次資料。**
+
+以下のタイミングで必ず追記・更新すること:
+
+- 新しい技術的困難を解決したとき（「なぜそうしたか」の理由を含めて）
+- 研究の方向性・モデル・評価設計に関する重要な判断をしたとき
+- 実験結果（Recall@K, MRR 等）が出たとき（数値と考察を記録）
+- 実装上のバグ・ワークアラウンドで後で参照価値がありそうなもの
+
+追記は「## 研究上の判断」「## 実装上の困難と解決策」「## 今後の課題」のいずれかに分類して書く。
+
 ## IMPACT dataset
 
 **現在のプロジェクトはこのデータセットのみを使用する。** `data/processed/`, `data/raw/`, `patents_metadata.csv` は使わない。
@@ -26,17 +40,17 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ```text
 data/IMPACT/
-├── 2020.csv                        # メタデータ CSV（caption列あり）
-├── 2021.csv
+├── 2007.csv                        # メタデータ CSV（caption列あり、全年共通）
+├── 2008.csv
+│   ...
 ├── 2022.csv
-├── 2020/
-│   └── 2020/
-│       ├── processed_xml_2020.csv  # メタデータ CSV（caption列なし）
+├── 2007/
+│   └── 2007/
+│       ├── processed_xml_2007.csv  # メタデータ CSV（caption列なし）
 │       └── USD<7digits>-<date>/    # 特許ごとの画像フォルダ
 │           ├── USD<7digits>-<date>-D<5digits>.TIF  # 意匠図面
 │           └── USD<7digits>-<date>.XML              # XML原本
-├── 2021/
-│   └── 2021/ ...
+├── ...
 └── 2022/
     └── 2022/ ...
 ```
@@ -56,7 +70,7 @@ data/IMPACT/
 | `sheets` | シート数 |
 | `file_names` | TIFファイル名リスト |
 | `fig_desc` | 図面説明文リスト |
-| `caption` | AI生成の視覚的説明文（**外側CSVのみ**: `2020.csv` / `2021.csv` / `2022.csv`） |
+| `caption` | AI生成の視覚的説明文（全年の外側CSV に存在） |
 
 ### 画像フォルダとCSVの紐付け
 
@@ -92,6 +106,52 @@ python functional_description/search.py "chair for office use" --alpha 0.7  # al
 - `faiss_text.index` — 機能文テキストベクトルのFAISSインデックス（Phase 2出力）
 - `index_map.json` — FAISSの行番号 → patent_idの対応表（Phase 2出力）
 
+### COrAL training on IMPACT (multimodal self-supervised)
+
+ディレクトリ: `論文/論文再現実装/COrAL/`。著者実装をベースに、IMPACTデータ用のエンコーダ・データセットを追加した。
+
+```bash
+cd 論文/論文再現実装/COrAL
+
+# スモークテスト（CPU、2022年データ、3バッチ）
+python main_impact.py --years 2022 --max_epochs 1 --batch_size 4 --num_workers 0 --limit_batches 3
+
+# GPUサーバーでのフル学習
+python main_impact.py --years 2020 2021 2022 --max_epochs 100 --batch_size 64 --num_workers 4
+
+# 全年（2007-2022、約44万件）
+python main_impact.py --max_epochs 100 --batch_size 64 --num_workers 4
+```
+
+**新規追加ファイル（著者実装への追加分）:**
+
+| ファイル | 役割 |
+| --- | --- |
+| `dataset/impact.py` | IMPACT用 Dataset / LightningDataModule。title+caption をテキスト、D00000.TIF を画像として返す。D00000.TIF の端の "Fig. X" ラベルを下部8%クロップで除去。アスペクト比ヒューリスティックで2枚並び画像を左半分に切り出す |
+| `modules/dinov2_encoder.py` | `DINOv2Encoder`: `AutoModel` をラップし `last_hidden_state` (B, 257, 768) を返す。テキスト事前アライメントなしの純粋な視覚エンコーダ |
+| `modules/clip_encoder.py` | `CLIPPatchEncoder`: 旧実装（CLIP ViT-B/32）。現在は `dinov2_encoder.py` に置き換え済み |
+| `modules/bert_encoder.py` | `BERTTokenEncoder`: `AutoModel` をラップし `last_hidden_state` (B, 128, 768) を返す。デフォルトは `answerdotai/ModernBERT-base`。Rustバックエンドのtokenizerをlazyプロパティ化し `deepcopy` 問題を回避 |
+| `main_impact.py` | エントリポイント。`MMFusion(encoders=[DINOv2Encoder, BERTTokenEncoder])` → `COrAL` を構築してTrainer.fitを呼ぶ |
+
+**アーキテクチャ:**
+
+- 画像: DINOv2-base (`facebook/dinov2-base`) → (B, 257, 768) パッチトークン列
+- テキスト: ModernBERT-base (`answerdotai/ModernBERT-base`) → (B, 128, 768) トークン列
+- 共有パス: FusionTransformer (CLS結合+self-attention) → (B, 768) → MLP → (B, 512)
+- 固有パス: lin_layer 768→384 + AttentionPooling → (B, 384) → MLP → (B, 512)
+- 損失: InfoNCE × 3（共有・画像固有・テキスト固有）+ 直交性損失 × 2
+
+**Windows固有の注意:**
+
+- `enable_progress_bar=False` を Trainer に設定済み（rich が cp932 端末でクラッシュするため）
+- CLIP/BERT の HuggingFace キャッシュはシンボリックリンク警告が出るが無害
+
+**ファイル編集の注意:**
+
+- COrAL コードは Google Drive for Desktop で同期されており、実行環境（Colab）は Drive 上のファイルを使用する
+- **必ず Drive パス（`G:\マイドライブ\松尾研究室\LLMATCH\USPTO_data_analysis\論文\論文再現実装\COrAL\`）を直接編集すること**
+- ローカルパス（`C:\Users\Barre\松尾研\LLMATCH\USPTO_data_analysis\論文\論文再現実装\COrAL\`）を編集しても Colab に反映されない
+
 ### Install dependencies
 
 ```bash
@@ -100,6 +160,8 @@ pip install matplotlib  # not listed in requirements.txt but required
 ```
 
 `requirements.txt` には以下が含まれる: `pandas`, `lxml`, `tqdm`, `torch`, `transformers`, `Pillow`, `faiss-cpu`, `sentence-transformers`, `accelerate`
+
+COrAL追加依存: `pytorch-lightning`, `omegaconf`, `tensorboard`, `scikit-learn`, `torchmetrics`, `einops`
 
 ## Architecture
 
