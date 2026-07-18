@@ -1,0 +1,17 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(c:/Users/Barre/松尾研/LLMATCH/USPTO_data_analysis/.venv/Scripts/python -c ' *)",
+      "Bash(nohup .venv/Scripts/python functional_description/generate_func_desc.py --sample 1000)",
+      "Bash(echo \"PID: $!\")",
+      "Bash(mkdir -p \"c:/Users/Barre/松尾研/LLMATCH/USPTO_data_analysis/logs\")",
+      "Bash(git -C \"c:\\\\Users\\\\Barre\\\\松尾研\\\\LLMATCH\\\\USPTO_data_analysis\" log --oneline --since=\"2026-05-28\" --until=\"2026-06-11\")",
+      "Bash(git -C \"c:\\\\Users\\\\Barre\\\\松尾研\\\\LLMATCH\\\\USPTO_data_analysis\" log --oneline --all)",
+      "Bash(git -C \"c:\\\\Users\\\\Barre\\\\松尾研\\\\LLMATCH\\\\USPTO_data_analysis\" show d8b7492 --stat)",
+      "Bash(mkdir -p \"c:\\\\Users\\\\Barre\\\\松尾研\\\\LLMATCH\\\\USPTO_data_analysis\\\\weekly_reports\")"
+    ],
+    "additionalDirectories": [
+      "c:\\Users\\Barre\\松尾研\\LLMATCH\\USPTO_data_analysis"
+    ]
+  }
+}

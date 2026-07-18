@@ -12,13 +12,9 @@ __pycache__/
 .venv/
 .env
 
-# reference materials (PDFs and paper folders)
-*.pdf
-論文/
-意匠ユースケース/
-
-# Claude Code settings (local only)
-.claude/
+# nested git repos (cloned author implementations, managed separately)
+論文/論文再現実装/COrAL/
+論文/論文再現実装/DeCUR/
 
 # log files
 logs/
