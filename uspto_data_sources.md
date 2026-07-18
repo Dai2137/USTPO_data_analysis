@@ -365,6 +365,60 @@ GET https://api.uspto.gov/api/v1/patent/oa/enriched_cited_reference_metadata/v3/
 
 ---
 
+---
+
+### 6. Patent File Wrapper (PFW) Documents API
+
+出願ごとのファイルラッパー内の**全文書**（メタデータ＋PDFダウンロードURL）を取得。
+
+**エンドポイント：**
+```
+GET https://api.uspto.gov/api/v1/patent/applications/{applicationNumberText}/documents
+```
+
+- `applicationNumberText`：出願番号（意匠特許は `29/XXXXXX` 系列）
+- 対象：2001年以降の公開出願・付与特許、日次更新
+- APIキー必要
+
+**取得できる文書種別（例）：**
+
+| コード | 文書の種類 |
+|---|---|
+| `CTFR` / `CTNF` | Final / Non-Final Office Action（審査官発行） |
+| `A..` | 出願人による応答（Remarks/Arguments を含む） |
+| `IDS` | Information Disclosure Statement（先行技術開示） |
+| `OATH` | 宣誓書 |
+| `DRWG` | 図面 |
+
+**重要な制約：**
+- レスポンスはメタデータ＋PDFダウンロードURLのみ。**構造化テキストは返らない**
+- 出願人のRemarksテキストを取得するにはPDFダウンロード→テキスト抽出（OCR）が必要
+- IMPACT CSVの `id`（特許番号 `D0949851`）≠ 出願番号。File Wrapper検索APIで変換が必要
+
+**出願番号の逆引き方法：**
+```
+GET https://api.uspto.gov/api/v1/patent/applications/search?patentNumber=D949851
+```
+
+---
+
+### 意匠特許の「出願時新規性文書」について（調査メモ）
+
+米国意匠特許の出願時提出物には、日本の「意匠の説明」に相当する**新規性を主張する文書が存在しない**。
+
+- クレームは定型文「The ornamental design for [article], as shown and described.」のみ
+- 新規性主張が言語化されるのは、審査中に§102/§103拒絶を受けた場合の**出願人応答（Remarks）**
+
+| 文書 | タイミング | テキストAPI |
+|---|---|---|
+| OAへの応答Remarks（新規性主張の核心） | 審査中 | なし（PDF経由のみ） |
+| IDS（先行技術開示リスト） | 出願時〜審査中 | なし（PDF経由のみ） |
+| §102拒絶テキスト（審査官が何と対比したか） | 審査中 | **Office Action Text APIで取得可** |
+
+→ 実用上は**§102拒絶テキスト**（審査官側）の方が構造化されており取得しやすい。出願人Remarksは価値があるが、PDF解析が必要でスケールしにくい。
+
+---
+
 ## データアクセス方針まとめ
 
 | データ種別 | 推奨取得方法 |
