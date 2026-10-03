@@ -52,7 +52,11 @@ def extract_one(xml_path: Path):
 
 
 def process_year(year: int, dry_run: bool = False) -> dict:
-    xml_dir = IMPACT_ROOT / str(year) / str(year)
+    # レイアウトは year/year/ の二重ネスト（旧仕様）と year/ の単層（現状確認済み、
+    # 2026-08時点で2022年分はこちら）の両方があり得るため両方試す。
+    nested = IMPACT_ROOT / str(year) / str(year)
+    flat = IMPACT_ROOT / str(year)
+    xml_dir = nested if nested.exists() else flat
     csv_path = IMPACT_ROOT / f"{year}.csv"
 
     if not xml_dir.exists() or not csv_path.exists():
